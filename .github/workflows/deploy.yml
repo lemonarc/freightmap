@@ -1,0 +1,42 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+
+  build:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: Commit to repository
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COMMIT_MSG: Deploy to GitHub
+      run: |
+        # Hard-code user configuration
+        git config user.email "contact@lemonarc.com"
+        git config user.name "Lemon Arc Bot"
+        # Update origin with token
+        git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
+        # Checkout the branch so we can push back to it
+        git add .
+        # Only commit if we have changes
+        git diff --quiet && git diff --staged --quiet || git commit -m "${COMMIT_MSG}"
+        git push origin master:deploy
+ 
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+    - name: Save DigitalOcean kubeconfig
+      run: doctl kubernetes cluster kubeconfig save shared-hosting
+
+    - name: Deploy new code
+      run: kubectl rollout restart deployment ${{ secrets.DEPLOYMENT_NAME }}
